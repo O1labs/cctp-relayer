@@ -43,8 +43,8 @@ test:
 .PHONY: install
 
 install: go.sum
-	@echo "🤖 Building noble-cctp-relayer..."
-	@go build -mod=readonly -ldflags '$(ldflags)' -o $(GOBIN)/noble-cctp-relayer main.go
+	@echo "🤖 Building cctp-relayer..."
+	@go build -mod=readonly -ldflags '$(ldflags)' -o $(GOBIN)/cctp-relayer main.go
 
 ###############################################################################
 ###                              Docker                                     ###
@@ -52,5 +52,5 @@ install: go.sum
 .PHONEY: local-docker
 
 local-docker:
-	@echo "🤖 Building docker image noble-cctp-relayer:local"
+	@echo "🤖 Building docker image cctp-relayer:local"
 	@docker build -t cctp-relayer:local-test -f ./local.Dockerfile .

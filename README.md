@@ -2,106 +2,186 @@
 
 <p align="center"><img src=".github/assets/portal.png"></p>
 
-This service listens and forwards Cross Chain Transfer Protocol events.   
-Lightweight and easily extensible with more chains.
+Lightweight service that listens and forwards Cross Chain Transfer Protocol (CCTP) events. Easily extensible with more chains.
 
-Installation
-```shell
-git clone https://github.com/strangelove-ventures/noble-cctp-relayer
-cd noble-cctp-relayer
+## 🚀 Quick Start
+
+```bash
+git clone https://github.com/O1ahmad/cctp-relayer
+cd cctp-relayer
 make install
+cctp-relayer start --config ./config/sample-config.yaml
 ```
 
-Running the relayer
-```shell
-noble-cctp-relayer start --config ./config/sample-app-config.yaml
-```
-Sample configs can be found in [config](config).
+Sample configs: [`config/`](config)
 
-### Flush Interval
+## ⚙️ Configuration
 
-Using the `--flush-interval` flag will run a flush on all chains every `duration`; ex `--flush-interval 5m`
+### Chain Configuration
 
-The first time the flush is run per chain, the flush will start at the chains `latest height - (2 * lookback period)`. The flush will always finish at the `latest chain height - lookback period`. This allows the flush to lag behind the chain so that the flush does not compete for transactions that are actively being processed. For subsequent flushes, each chain will reference its last flushed block, start from there and flush to the `latest chain height - lookback period` again. The flushing process will continue as long as the relayer is running.
+Each chain requires specific settings. Below are the key fields:
 
-For best results and coverage, the lookback period in blocks should correspond to the flush interval. If a chain produces 1 block a second and the flush interval is set to 30 minutes (1800 seconds), the lookback period should be at least 1800 blocks. When in doubt, round up and add a small buffer.
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `rpc` | string | RPC endpoint URL | `https://eth-mainnet.g.alchemy.com/v2/...` |
+| `ws` | string | WebSocket endpoint (EVM chains) | `wss://...` |
+| `chain-id` | string/int | Chain identifier | `"grand-1"` (Noble), `5` (Goerli) |
+| `domain` | int | CCTP domain ID | `0` (Ethereum), `4` (Noble), `5` (Solana) |
+| `start-block` | uint64 | Starting block height (0 = latest) | `0` |
+| `lookback-period` | uint64 | Historical blocks to look back on launch | `5` |
+| `workers` | int | Number of concurrent workers | `8` |
+| `broadcast-retries` | int | Number of broadcast retry attempts | `5` |
+| `broadcast-retry-interval` | int | Seconds between retries | `10` |
+| `min-mint-amount` | uint64 | Minimum amount to relay (in base units) | `10000000` ($10) |
+| `minter-private-key` | string | Hex-encoded private key | `0xabc123...` |
+| `metrics-denom` | string | Denomination for balance metrics | `"ETH"`, `"USDC"` |
+| `metrics-exponent` | int | Exponent for unit conversion | `18` (Wei→ETH) |
 
-#### Examples
+### Supported Chains
 
-Consider a 30 minute flush interval (1800 seconds)
-- Ethereum: 12 second blocks = (1800 / 12) = `150 blocks`
-- Polygon: 2 second blocks = (1800 / 2) = `900 blocks`
-- Arbitrum: 0.26 second blocks = (1800 / 0.26) = `~6950 blocks`
+| Chain | Domain | Example Config Key |
+|-------|--------|-------------------|
+| Noble | 4 | `noble` |
+| Ethereum | 0 | `ethereum` |
+| Optimism | 2 | `optimism` |
+| Arbitrum | 3 | `arbitrum` |
+| Avalanche | 1 | `avalanche` |
+| Solana | 5 | `solana` |
 
-### Flush Only Mode
+### Enabled Routes
 
-This relayer also supports a `--flush-only-mode`. This mode will only flush the chain and not actively listen for new events as they occur. This is useful for running a secondary relayer which "lags" behind the primary relayer. It is only responsible for retrying failed transactions. 
+Define which source→destination routes are active:
 
-When the relayer is in flush only mode, the flush mechanism will start at `latest height - (4 * lookback period)` and finish at `latest height - (3 * lookback period)`. For all subsequent flushes, the relayer will start at the last flushed block and finish at `latest height - (3 * lookback period)`. Please see the notes above for configuring the flush interval and lookback period.
-
-> Note: It is highly recommended to use the same configuration for both the primary and secondary relayer. This ensures that there is zero overlap between the relayers.
-
-### Prometheus Metrics
-
-By default, metrics are exported at on port :2112/metrics (`http://localhost:2112/metrics`). You can customize the port using the `--metrics-port` flag. 
-
-| **Exported Metric**                 | **Description**                                                                                                                                  | **Type** |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| cctp_relayer_wallet_balance         | Current balance of a relayer wallet in Wei.<br><br>Noble balances are not currently exported b/c `MsgReceiveMessage` is free to submit on Noble. | Gauge    |
-| cctp_relayer_chain_latest_height    | Current height of the chain.                                                                                                                     | Gauge    |
-| cctp_relayer_broadcast_errors_total | The total number of failed broadcasts. Note: this is AFTER it retries `broadcast-retries` (config setting) number of times.                      | Counter  |
-
-### Minter Private Keys
-Minter private keys are required on a per chain basis to broadcast transactions to the target chain. These private keys can either be set in the `config.yaml` or via environment variables. 
-
-#### Config Private Keys
-
-Please see `./config/sample-config.yaml` for setting minter private keys in configuration. Please note that this method is insecure as the private keys are stored in plain text.
-
-#### Env Vars Private Keys
-
-To pass in a private key via an environment variable, first identify the chain's name. A chain's name corresponds to the key under the `chains` section in the `config.yaml`. The sample config lists these chain names for example: `noble`, `ethereum`, `optimism`, etc. Now, take the chain name in all caps and append `_PRIV_KEY`.
-
-An environment variable for `noble` would look like: `NOBLE_PRIV_KEY=<PRIVATE_KEY_HERE>`
-
-#### Noble Private Key Format
-
-The noble private key you input into the config or via enviroment variables must be hex encoded. The easiest way to get this is via a chain binary:
-
-`nobled keys export <KEY_NAME> --unarmored-hex --unsafe`
-
-### API
-Simple API to query message state cache
-```shell
-# All messages for a source tx hash
-localhost:8000/tx/<hash, including the 0x prefix>
-# All messages for a tx hash and domain 0 (Ethereum)
-localhost:8000/tx/<hash>?domain=0
+```yaml
+enabled-routes:
+  0: [4, 5]    # ethereum → noble, solana
+  1: [4]       # avalanche → noble
+  2: [4]       # optimism → noble
+  3: [4]       # arbitrum → noble
+  4: [0,1,2,3,5] # noble → ethereum, avalanche, optimism, arbitrum, solana
 ```
 
-### State
+### Circle API Settings
 
-| IrisLookupId | Status   | SourceDomain | DestDomain | SourceTxHash | DestTxHash | MsgSentBytes | Created | Updated |
-| :----------- | :------- | :----------- | :--------- | :----------- | :--------- | :----------- | :------ | :------ |
-| 0x123        | Created  | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
-| 0x123        | Pending  | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
-| 0x123        | Attested | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
-| 0x123        | Complete | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
-| 0x123        | Failed   | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
-| 0x123        | Filtered | 0            | 4          | 0x123        | ABC123     | bytes...     | date    | date    |
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `attestation-base-url` | string | Base URL for attestation API | `"https://iris-api-sandbox.circle.com/attestations/"` |
+| `api-version` | string | API version (`v1` or `v2`) | `"v1"` |
+| `fetch-retries` | int | Additional attestation fetch attempts | `30` |
+| `fetch-retry-interval` | int | Seconds between fetch retries | `3` |
+| `enable-fast-transfer-monitoring` | bool | Enable v2 allowance monitoring | `false` |
+| `reattest-max-retries` | int | Max re-attestation attempts (v2) | `3` |
+| `expiration-buffer-blocks` | int | Blocks before expiry to re-attest | `100` |
+| `allowance-monitor-token` | string | Token to monitor (v2) | `"USDC"` |
+| `allowance-monitor-interval` | int | Polling interval in seconds | `30` |
 
-### Generating Go ABI bindings
+### Filter Plugins
 
-```shell
-abigen --abi ethereum/abi/TokenMessenger.json --pkg contracts --type TokenMessenger --out ethereum/contracts/TokenMessenger.go
-abigen --abi ethereum/abi/TokenMessengerWithMetadata.json --pkg contracts --type TokenMessengerWithMetadata --out ethereum/contracts/TokenMessengerWithMetadata.go
-abigen --abi ethereum/abi/ERC20.json --pkg integration_testing --type ERC20 --out integration/ERC20.go
-abigen --abi ethereum/abi/MessageTransmitter.json --pkg contracts- --type MessageTransmitter --out ethereum/contracts/MessageTransmitter.go
+Filters apply validation rules to incoming messages:
+
+| Filter | Description | Config Example |
+|--------|-------------|----------------|
+| `depositor-whitelist` | Only allow transfers from whitelisted depositors (EVM chains) | See below |
+| `low-transfer` | Filter transfers below minimum mint amounts | Auto-configured from chain configs |
+| `destination-caller` | Validate destination caller addresses | Controlled by `destination-caller-only` flag |
+
+**Depositor Whitelist Configuration:**
+```yaml
+filters:
+  - name: "depositor-whitelist"
+    enabled: true
+    config:
+      provider: "quicknode-kv"
+      provider_config:
+        api_key: "your-api-key"
+      kv_key: "cctp-depositor-whitelist"
+      refresh_interval: 300  # seconds
 ```
 
-### Useful links
-[Relayer Flow Charts](./docs/flows.md)
+## 🔧 Operational Modes
 
-[USDC faucet](https://faucet.circle.com)
+### Flush Interval Mode
 
-[Circle Docs/Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)
+Run periodic flushes with `--flush-interval <duration>` (e.g., `5m`).
+
+- First flush per chain starts at `latest height - (2 × lookback period)`
+- Flush ends at `latest height - lookback period`
+- Subsequent flushes continue from last flushed block
+- Configure `lookback-period` based on block time and flush interval
+
+**Example (30‑minute flush interval):**
+- Ethereum (12s blocks): `150` blocks
+- Polygon (2s blocks): `900` blocks
+- Arbitrum (0.26s blocks): `~6950` blocks
+
+### Flush‑Only Mode
+
+Run `--flush-only-mode` for a secondary relayer that only retries failed transactions.
+
+- Starts at `latest height - (4 × lookback period)`
+- Ends at `latest height - (3 × lookback period)`
+- Uses same config as primary relayer to avoid overlap
+
+## 📊 Prometheus Metrics
+
+Metrics are exposed at `http://localhost:2112/metrics` (customize with `--metrics-port`).
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `cctp_relayer_wallet_balance` | Gauge | `chain`, `address`, `denom` | Current wallet balance in Wei (Noble balances not exported) |
+| `cctp_relayer_chain_latest_height` | Gauge | `chain`, `domain` | Current chain height |
+| `cctp_relayer_broadcast_errors_total` | Counter | `chain`, `domain` | Total failed broadcasts (after retries) |
+| `cctp_relayer_fast_transfer_allowance` | Gauge | `chain`, `domain`, `token` | Fast Transfer allowance (v2 only) |
+| `cctp_relayer_attestation_total` | Counter | `src_chain`, `dest_chain`, `status`, `source_domain`, `dest_domain` | Attestation state transitions |
+| `cctp_relayer_attestation_pending` | Gauge | `src_chain`, `dest_chain`, `source_domain`, `dest_domain` | Number of pending attestations |
+
+## 🔑 Minter Private Keys
+
+Private keys can be set in config or via environment variables.
+
+### Environment Variables
+Format: `<CHAIN_NAME_UPPER>_PRIV_KEY`
+
+Example for Noble: `NOBLE_PRIV_KEY=0x...`
+
+### Noble Private Key Format
+Noble private keys must be hex‑encoded. Export with:
+```bash
+nobled keys export <KEY_NAME> --unarmored-hex --unsafe
+```
+
+## 🌐 API
+
+Simple HTTP API to query message state cache:
+
+```bash
+# All messages for a source transaction hash
+curl localhost:8000/tx/0x...
+
+# Messages filtered by domain
+curl localhost:8000/tx/0x...?domain=0
+```
+
+## 📈 State
+
+Message states stored in cache:
+
+| IrisLookupId | Status | SourceDomain | DestDomain | SourceTxHash | DestTxHash | MsgSentBytes | Created | Updated |
+|--------------|--------|--------------|------------|--------------|------------|--------------|---------|---------|
+| `0x123...` | Created | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+| `0x123...` | Pending | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+| `0x123...` | Attested | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+| `0x123...` | Complete | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+| `0x123...` | Failed | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+| `0x123...` | Filtered | 0 | 4 | `0x...` | `ABC...` | `bytes...` | timestamp | timestamp |
+
+## 🔗 Useful Links
+
+- [Relayer Flow Charts](./docs/flows.md)
+- [USDC Faucet](https://faucet.circle.com)
+- [Circle Docs & Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)
+- [Generating Go ABI Bindings](./README.md#generating-go-abi-bindings)
+
+## 📄 License
+
+MIT
