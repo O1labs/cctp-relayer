@@ -63,7 +63,7 @@ RUN for b in \
 RUN rm ln rm
 
 # Install chain binaries
-COPY --from=build-env /bin/noble-cctp-relayer /bin
+COPY --from=build-env /bin/cctp-relayer /bin
 
 # Install trusted CA certificates
 COPY --from=busybox-min /etc/ssl/cert.pem /etc/ssl/cert.pem

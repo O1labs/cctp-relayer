@@ -80,7 +80,7 @@ RUN for b in \
 RUN rm ln rm
 
 # Install relayer binaries
-COPY --from=build-env /go/bin/noble-cctp-relayer /bin
+COPY --from=build-env /go/bin/cctp-relayer /bin
 
 # Install trusted CA certificates
 COPY --from=busybox-min /etc/ssl/cert.pem /etc/ssl/cert.pem

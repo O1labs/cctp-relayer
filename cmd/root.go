@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const appName = "noble-cctp-relayer"
+const appName = "cctp-relayer"
 
 var defaultConfigPath = "./config"
 
