@@ -179,7 +179,7 @@ Message states stored in cache:
 
 - [Relayer Flow Charts](./docs/flows.md)
 - [USDC Faucet](https://faucet.circle.com)
-- [Circle Docs & Contract Addresses](https://developers.circle.com/stablecoins/docs/evm-smart-contracts)
+- [Circle Docs & Contract Addresses](https://developers.circle.com/cctp/references/contract-addresses)
 - [Generating Go ABI Bindings](./README.md#generating-go-abi-bindings)
 
 ## 📄 License
